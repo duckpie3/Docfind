@@ -1,2 +1,0 @@
-Design a quickshell status bar for Arch Linux, based on the following style.
-1. Theme 
