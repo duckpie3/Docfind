@@ -72,15 +72,10 @@ def get_level_number(level: str) -> int:
 
 
 def find_passage_end(headings: list[dict], current_index: int) -> int:
-    current_level = get_level_number(headings[current_index]["level"])
+    next_index = current_index + 1
+    end = headings[next_index]["line_number"] - 1 if next_index < len(headings) else len(content.splitlines())
 
-    for next_index in range(current_index + 1, len(headings)):
-        next_level = get_level_number(headings[next_index]["level"])
-
-        if next_level <= current_level:
-            return headings[next_index]["line_number"] - 1
-
-    return len(content.splitlines())
+    return end
 
 
 def extract_passage(content: str, headings: list[dict], heading_index: int) -> dict:
@@ -98,23 +93,12 @@ def extract_passage(content: str, headings: list[dict], heading_index: int) -> d
         "content": passage,
     }
 
-rst_path = Path("/tmp/docfind-tutorials/beginner_source/pytorch_with_examples.rst")
+rst_path = Path("/home/david/tutorials/beginner_source/pytorch_with_examples.rst")
 
 content = rst_path.read_text(encoding="utf-8")
-
-lines = content.splitlines()
 headings = extract_headings(content)
 
 passages = [extract_passage(content, headings, i) for i in range(len(headings))]
 
 for passage in passages:
     print(f"Title: {passage['title']}, Level: {passage['level']}, length: {len(passage['content'])} characters")
-
-# for i, heading in enumerate(headings):
-#     if heading["title"] == "Warm-up: numpy":
-#         end_line = find_passage_end(headings, i)
-
-#         passage = "\n".join(lines[heading["line_number"] + 1 : end_line]).strip()
-
-#         print(passage)
-#         break
