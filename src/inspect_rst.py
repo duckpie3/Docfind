@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 def is_heading_underline(line: str) -> bool:
@@ -73,7 +74,11 @@ def get_level_number(level: str) -> int:
 
 def find_passage_end(headings: list[dict], current_index: int) -> int:
     next_index = current_index + 1
-    end = headings[next_index]["line_number"] - 1 if next_index < len(headings) else len(content.splitlines())
+    end = (
+        headings[next_index]["line_number"] - 1
+        if next_index < len(headings)
+        else len(content.splitlines())
+    )
 
     return end
 
@@ -93,12 +98,60 @@ def extract_passage(content: str, headings: list[dict], heading_index: int) -> d
         "content": passage,
     }
 
+
+def clean_hyperlinks(text: str) -> str:
+    pattern = r"`([^`]+?)\s<https?://[^>]+>`__?"
+
+    return re.sub(pattern, r"\1", text)
+
+
+def get_indentation(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def is_indented_block_line(line: str, base_indent: int) -> bool:
+    return get_indentation(line) > base_indent or line.strip() == ""
+
+
+def remove_directive_blocks(content: str, directive_names: set[str]) -> str:
+    lines = content.splitlines()
+    new_lines = []
+    skip_block = False
+    base_indent = 0
+
+    for line in lines:
+        if line.strip().startswith(tuple(f".. {name}::" for name in directive_names)):
+            skip_block = True
+            base_indent = get_indentation(line)
+            continue
+
+        if skip_block:
+            if is_indented_block_line(line, base_indent):
+                continue
+            else:
+                skip_block = False
+
+        new_lines.append(line)
+
+    return "\n".join(new_lines)
+
+
+def clean_documentation(content: str) -> str:
+    content = remove_directive_blocks(content, {"toctree", "galleryitem", "raw"})
+    content = clean_hyperlinks(content)
+    return content
+
+
 rst_path = Path("/home/david/tutorials/beginner_source/pytorch_with_examples.rst")
 
 content = rst_path.read_text(encoding="utf-8")
+content = clean_documentation(content)
+
 headings = extract_headings(content)
 
 passages = [extract_passage(content, headings, i) for i in range(len(headings))]
 
 for passage in passages:
-    print(f"Title: {passage['title']}, Level: {passage['level']}, length: {len(passage['content'])} characters")
+    print(
+        f"Title: {passage['title']}\n Level: {passage['level']}\n length: {len(passage['content'])} characters\n Preview: {passage['content'][:100]}...\n\n"
+    )
