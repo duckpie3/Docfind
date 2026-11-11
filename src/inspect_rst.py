@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import ast, warnings
 
 
 def is_heading_underline(line: str) -> bool:
@@ -136,13 +137,23 @@ def remove_directive_blocks(content: str, directive_names: set[str]) -> str:
     return "\n".join(new_lines)
 
 
+def remove_hyperlink_definitions(content: str) -> str:
+    pattern = r"^\s*\.\. _[^:]+:(?:\s*https?://[^\s]+)?$"
+    return re.sub(pattern, "", content, flags=re.MULTILINE)
+
+
 def clean_documentation(content: str) -> str:
-    content = remove_directive_blocks(content, {"toctree", "galleryitem", "raw"})
+    content = remove_directive_blocks(
+        content, {"toctree", "galleryitem", "raw", "contents"}
+    )
     content = clean_hyperlinks(content)
+    content = remove_hyperlink_definitions(content)
     return content
 
 
-rst_path = Path("/home/david/tutorials/beginner_source/pytorch_with_examples.rst")
+rst_path = Path(
+    "/home/david/tutorials/beginner_source/examples_tensor/polynomial_numpy.py"
+)
 
 content = rst_path.read_text(encoding="utf-8")
 content = clean_documentation(content)
