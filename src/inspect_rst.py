@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 import ast, warnings
+from pprint import pprint
 
 
 def is_heading_underline(line: str) -> bool:
@@ -142,6 +143,11 @@ def remove_hyperlink_definitions(content: str) -> str:
     return re.sub(pattern, "", content, flags=re.MULTILINE)
 
 
+def clean_inline_rst(text: str) -> str:
+    pattern = r":math:`(.*?)`"
+    return re.sub(pattern, r"\1", text)
+
+
 def extract_python_docstring(source: str) -> str:
     try:
         with warnings.catch_warnings():
@@ -186,28 +192,155 @@ def extract_python_example(source: str) -> dict:
     return {"docstring": docstring, "code": code}
 
 
+def resolve_example_path(reference: str) -> Path:
+    tutorials_root = Path("/tmp/tutorials/")
+    # Add "_source" to first directory in the path
+    parts = Path(reference.lstrip("/")).parts
+    source_dir = f"{parts[0]}_source"
+    file_path = tutorials_root / source_dir / Path(*parts[1:])
+    return file_path
+
+
+def generate_example_id(reference: str) -> str:
+    # Generate a unique example ID based on the reference path
+    # Remove leading slash and .py extension
+
+    example_path = reference.removesuffix(".py").removeprefix("/")
+    example_id = example_path.replace("/", "_")
+    return example_id
+
+
+def generate_document_id(source_path: Path) -> str:
+    # Generate a unique document ID based on the source path
+    document_id = source_path.stem
+    return document_id
+
+
+def generate_source_url(reference: str) -> str:
+    base_url = "https://pytorch.org/tutorials"
+
+    reference = reference.removeprefix("/")
+    reference = reference.removesuffix(".py")
+
+    return f"{base_url}/{reference}.html"
+
+
+def extract_code_record_from_reference(
+    reference: str, document_path: Path, parent_section: str
+) -> dict:
+    # Extracts record from includedoc directive reference
+    # Example reference: `/beginner/examples_tensor/polynomial_numpy.py`
+    record = {
+        "source_url": "",
+        "document_id": "",
+        "example_id": "",
+        "title": "",
+        "parent_section": "",
+        "source_path": "",
+        "source_type": "python_example",
+        "docstring": "",
+        "code": "",
+    }
+
+    file_path = resolve_example_path(reference)
+    try:
+        content = Path(file_path).read_text(encoding="utf-8")
+        code_example = extract_python_example(content)
+
+    except FileNotFoundError:
+        raise FileNotFoundError("Example file not found.")
+    parts = Path(reference.lstrip("/")).parts
+    source_dir = f"{parts[0]}_source"
+    source_path = source_dir / Path(*parts[1:])
+
+    record["source_url"] = generate_source_url(reference)
+    record["document_id"] = generate_document_id(document_path)
+    record["example_id"] = generate_example_id(reference)
+    if code_example["docstring"]:
+        record["title"] = code_example["docstring"].splitlines()[0].strip()
+    record["parent_section"] = parent_section
+    record["source_path"] = str(source_path)
+    record["docstring"] = code_example["docstring"]
+    record["cleaned_docstring"] = clean_documentation(code_example["docstring"])
+    record["code"] = code_example["code"]
+    record["cleaned_code"] = code_example["code"]
+
+    return record
+
+
+def extract_code_references(passage_content: str) -> list[str]:
+    pattern = r"\.\. includenodoc::\s+(.+)"
+    return re.findall(pattern, passage_content)
+
+
+def extract_code_records_from_passage(
+    passage: dict,
+    document_path: Path,
+) -> list[dict]:
+    records = []
+
+    references = extract_code_references(passage["content"])
+
+    for reference in references:
+        record = extract_code_record_from_reference(
+            reference,
+            document_path,
+            passage["parent_section"],
+        )
+
+        records.append(record)
+
+    return records
+
+
+def extract_all_code_records(
+    content: str,
+    document_path: Path,
+) -> list[dict]:
+    headings = extract_headings(content)
+    records = []
+
+    for heading_index, heading in enumerate(headings):
+        passage = extract_passage(content, headings, heading_index)
+
+        if not passage["content"].strip():
+            continue
+
+        passage_records = extract_code_records_from_passage(
+            passage,
+            document_path,
+        )
+
+        records.extend(passage_records)
+
+    return records
+
+
 def clean_documentation(content: str) -> str:
     content = remove_directive_blocks(
         content, {"toctree", "galleryitem", "raw", "contents"}
     )
     content = clean_hyperlinks(content)
     content = remove_hyperlink_definitions(content)
+    content = clean_inline_rst(content)
     return content
 
 
-rst_path = Path(
-    "/home/david/tutorials/beginner_source/examples_tensor/polynomial_numpy.py"
-)
-
+rst_path = Path("/tmp/tutorials/beginner_source/pytorch_with_examples.rst")
 content = rst_path.read_text(encoding="utf-8")
-# content = clean_documentation(content)
-example = extract_python_example(content)
-print(f"Docstring:\n{example['docstring']}\n\nCode:\n{example['code']}\n\n")
-# headings = extract_headings(content)
+content = clean_documentation(content)
+headings = extract_headings(content)
+passages = [extract_passage(content, headings, i) for i in range(len(headings))]
 
-# passages = [extract_passage(content, headings, i) for i in range(len(headings))]
-
+example_records = extract_all_code_records(content, rst_path)
+print(example_records[0]["docstring"])
+print("--- CLEANED ---")
+print(example_records[0]["cleaned_docstring"])
 # for passage in passages:
-#     print(
-#         f"Title: {passage['title']}\n Level: {passage['level']}\n length: {len(passage['content'])} characters\n Preview: {passage['content'][:100]}...\n\n"
-#     )
+#     print(f"Title: {passage['title']}")
+#     print(f"Level: {passage['level']}")
+#     print(f"Parent Section: {passage['parent_section']}")
+#     print(f"Line Number: {passage['line_number']}")
+#     print("Content:")
+#     print(passage["content"])
+#     print("-" * 40)
