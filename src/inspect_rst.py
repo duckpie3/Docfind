@@ -142,6 +142,50 @@ def remove_hyperlink_definitions(content: str) -> str:
     return re.sub(pattern, "", content, flags=re.MULTILINE)
 
 
+def extract_python_docstring(source: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            module = ast.parse(source)
+        docstring = ast.get_docstring(module)
+        return docstring if docstring is not None else ""
+    except SyntaxError:
+        return ""
+
+
+def extract_python_code(source: str) -> str:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            module = ast.parse(source)
+        if module.body:
+            first_node = module.body[0]
+            # Check if the first node is a docstring
+            if isinstance(first_node, ast.Expr) and isinstance(
+                first_node.value, ast.Constant
+            ):
+                # Remove the docstring from the source code
+                docstring = ast.get_docstring(module)
+                if docstring is not None:
+                    # Split the source code into lines
+                    source_lines = source.splitlines()
+                    # Remove the lines corresponding to the docstring
+                    code_lines = (
+                        source_lines[: first_node.lineno - 1]
+                        + source_lines[first_node.end_lineno :]
+                    )
+                    return "\n".join(code_lines).strip()
+        return source.strip()
+    except SyntaxError:
+        return ""
+
+
+def extract_python_example(source: str) -> dict:
+    docstring = extract_python_docstring(source)
+    code = extract_python_code(source)
+    return {"docstring": docstring, "code": code}
+
+
 def clean_documentation(content: str) -> str:
     content = remove_directive_blocks(
         content, {"toctree", "galleryitem", "raw", "contents"}
@@ -156,13 +200,14 @@ rst_path = Path(
 )
 
 content = rst_path.read_text(encoding="utf-8")
-content = clean_documentation(content)
+# content = clean_documentation(content)
+example = extract_python_example(content)
+print(f"Docstring:\n{example['docstring']}\n\nCode:\n{example['code']}\n\n")
+# headings = extract_headings(content)
 
-headings = extract_headings(content)
+# passages = [extract_passage(content, headings, i) for i in range(len(headings))]
 
-passages = [extract_passage(content, headings, i) for i in range(len(headings))]
-
-for passage in passages:
-    print(
-        f"Title: {passage['title']}\n Level: {passage['level']}\n length: {len(passage['content'])} characters\n Preview: {passage['content'][:100]}...\n\n"
-    )
+# for passage in passages:
+#     print(
+#         f"Title: {passage['title']}\n Level: {passage['level']}\n length: {len(passage['content'])} characters\n Preview: {passage['content'][:100]}...\n\n"
+#     )
