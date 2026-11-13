@@ -1,7 +1,7 @@
-from pathlib import Path
+import ast
 import re
-import ast, warnings
-from pprint import pprint
+import warnings
+from pathlib import Path
 
 
 def is_heading_underline(line: str) -> bool:
@@ -84,15 +84,32 @@ def find_passage_end(headings: list[dict], current_index: int) -> int:
 
     return end
 
+def generate_document_url(document_path: Path) -> str:
+    base_url = "https://pytorch.org/tutorials"
+    relative_path = document_path.relative_to(Path("/tmp/tutorials"))
+    # Remove the "_source" suffix from the first directory in the path
+    parts = relative_path.parts
+    if parts[0].endswith("_source"):
+        parts = (parts[0][:-7],) + parts[1:]
+        relative_path = Path(*parts)
+    url_path = relative_path.with_suffix(".html")
+    return f"{base_url}/{url_path}"
 
-def extract_passage(content: str, headings: list[dict], heading_index: int) -> dict:
+def extract_passage(content: str, headings: list[dict], heading_index: int, document_path: Path) -> dict:
     heading = headings[heading_index]
     end_line = find_passage_end(headings, heading_index)
 
     passage_lines = content.splitlines()[heading["line_number"] + 1 : end_line]
     passage = "\n".join(passage_lines).strip()
+    tutorials_root = Path("/tmp/tutorials")
+    relative_path = document_path.relative_to(tutorials_root)
+
+    url = generate_document_url(document_path)
 
     return {
+        "document_id": generate_document_id(document_path),
+        "source_path": str(relative_path),
+        "source_url": url,
         "title": heading["title"],
         "level": heading["level"],
         "parent_section": heading["parent_section"],
@@ -299,7 +316,7 @@ def extract_all_code_records(
     records = []
 
     for heading_index, heading in enumerate(headings):
-        passage = extract_passage(content, headings, heading_index)
+        passage = extract_passage(content, headings, heading_index, document_path)
 
         if not passage["content"].strip():
             continue
@@ -328,11 +345,17 @@ rst_path = Path("/tmp/tutorials/beginner_source/pytorch_with_examples.rst")
 content = rst_path.read_text(encoding="utf-8")
 cleaned_content = clean_documentation(content)
 headings = extract_headings(cleaned_content)
-passages = [extract_passage(cleaned_content, headings, i) for i in range(len(headings))]
+passages = [extract_passage(cleaned_content, headings, i, rst_path) for i in range(len(headings))]
 
 example_records = extract_all_code_records(content, rst_path)
 
+print("Total passages extracted:", len(passages))
+print("Total example records extracted:", len(example_records))
+print("=" * 40)
 for passage in passages:
+    print("Document ID:", passage["document_id"])
+    print("Source Path:", passage["source_path"])
+    print("Source URL:", passage["source_url"])
     print(f"Title: {passage['title']}")
     print(f"Level: {passage['level']}")
     print(f"Parent Section: {passage['parent_section']}")
