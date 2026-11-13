@@ -57,7 +57,7 @@ class Document:
         return None
 
     def _extract_headings(self) -> list[dict]:
-        lines = self.content.splitlines()
+        lines = self.cleaned_content.splitlines()
         headings = []
         current_section = None
 
@@ -95,5 +95,5 @@ class Document:
         )
 
 
-document = Document("/tmp/tutorials/beginner_source/pytorch_with_examples.rst")
-print(document)
+# document = Document("/tmp/tutorials/beginner_source/pytorch_with_examples.rst")
+# print(document.cleaned_content)

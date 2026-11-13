@@ -3,28 +3,29 @@ import os
 import re
 import warnings
 from pathlib import Path
-import pprint
-from clean_documentation import clean_documentation
+
+from clean_documentation import clean_documentation, remove_directive_blocks
 from document import Document
 
 TUTORIALS_ROOT = Path(os.environ.get("DOCUMENTATION_DOWNLOAD_DIR", "/tmp/tutorials"))
 
 
 def extract_passage(document: Document, heading_index: int) -> dict:
+    content = document.cleaned_content
 
     def find_passage_end() -> int:
         next_index = heading_index + 1
         end = (
             document.headings[next_index]["line_number"] - 1
             if next_index < len(document.headings)
-            else len(document.content.splitlines())
+            else len(content.splitlines())
         )
         return end
 
     heading = document.headings[heading_index]
     end_line = find_passage_end()
 
-    passage_lines = document.content.splitlines()[heading["line_number"] + 1 : end_line]
+    passage_lines = content.splitlines()[heading["line_number"] + 1 : end_line]
     passage = "\n".join(passage_lines).strip()
 
     return {
@@ -38,6 +39,13 @@ def extract_passage(document: Document, heading_index: int) -> dict:
         "content": passage,
     }
 
+def extract_all_passages(document: Document) -> list[dict]:
+    passages = []
+    for heading_index in range(len(document.headings)):
+        passage = extract_passage(document, heading_index)
+        if passage["content"].strip():  # Only include passages with non-empty content
+            passages.append(passage)
+    return passages
 
 def extract_python_docstring(source: str) -> str:
     try:
@@ -172,17 +180,23 @@ def extract_code_records_from_passage(passage: dict) -> list[dict]:
     return records
 
 
-def extract_all_code_records(document: Document) -> list[dict]:
+
+def extract_all_code_records(passages: list[dict]) -> list[dict]:
     records = []
 
-    for heading_index in range(len(document.headings)):
-        passage = extract_passage(document, heading_index)
+    for passage in passages:
 
         if not passage["content"].strip():
             continue
 
         passage_records = extract_code_records_from_passage(passage)
-
+        if not passage_records:
+            continue
+        passage["content"] = remove_directive_blocks(
+            passage["content"], {"includenodoc"}
+        )
+        # Remove trailing whitespace from the passage content
+        passage["content"] = passage["content"].rstrip()
         records.extend(passage_records)
 
     return records
@@ -190,9 +204,8 @@ def extract_all_code_records(document: Document) -> list[dict]:
 
 rst_path = TUTORIALS_ROOT / "beginner_source/pytorch_with_examples.rst"
 document = Document(str(rst_path))
-passages = [extract_passage(document, i) for i in range(len(document.headings))]
-
-example_records = extract_all_code_records(document)
+passages = extract_all_passages(document)
+example_records = extract_all_code_records(passages)
 
 print("Total passages extracted:", len(passages))
 print("Total example records extracted:", len(example_records))

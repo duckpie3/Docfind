@@ -50,7 +50,7 @@ def clean_inline_rst(text: str) -> str:
 
 def clean_documentation(content: str) -> str:
     content = remove_directive_blocks(
-        content, {"toctree", "galleryitem", "raw", "contents", "includenodoc"}
+        content, {"toctree", "galleryitem", "raw", "contents"}
     )
     content = clean_hyperlinks(content)
     content = remove_hyperlink_definitions(content)
