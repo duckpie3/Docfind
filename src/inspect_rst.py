@@ -226,16 +226,17 @@ def generate_source_url(reference: str) -> str:
 
 
 def extract_code_record_from_reference(
-    reference: str, document_path: Path, parent_section: str
+    reference: str, document_path: Path, section: str, parent_section: str
 ) -> dict:
     # Extracts record from includedoc directive reference
     # Example reference: `/beginner/examples_tensor/polynomial_numpy.py`
     record = {
-        "source_url": "",
-        "document_id": "",
-        "example_id": "",
+        "source_url": generate_source_url(reference),
+        "document_id": generate_document_id(document_path),
+        "example_id": generate_example_id(reference),
         "title": "",
-        "parent_section": "",
+        "section": section,
+        "parent_section": parent_section,
         "source_path": "",
         "source_type": "python_example",
         "docstring": "",
@@ -253,12 +254,8 @@ def extract_code_record_from_reference(
     source_dir = f"{parts[0]}_source"
     source_path = source_dir / Path(*parts[1:])
 
-    record["source_url"] = generate_source_url(reference)
-    record["document_id"] = generate_document_id(document_path)
-    record["example_id"] = generate_example_id(reference)
     if code_example["docstring"]:
         record["title"] = code_example["docstring"].splitlines()[0].strip()
-    record["parent_section"] = parent_section
     record["source_path"] = str(source_path)
     record["docstring"] = code_example["docstring"]
     record["cleaned_docstring"] = clean_documentation(code_example["docstring"])
@@ -285,6 +282,7 @@ def extract_code_records_from_passage(
         record = extract_code_record_from_reference(
             reference,
             document_path,
+            passage["title"],
             passage["parent_section"],
         )
 
@@ -318,7 +316,7 @@ def extract_all_code_records(
 
 def clean_documentation(content: str) -> str:
     content = remove_directive_blocks(
-        content, {"toctree", "galleryitem", "raw", "contents"}
+        content, {"toctree", "galleryitem", "raw", "contents", "includenodoc"}
     )
     content = clean_hyperlinks(content)
     content = remove_hyperlink_definitions(content)
@@ -328,19 +326,28 @@ def clean_documentation(content: str) -> str:
 
 rst_path = Path("/tmp/tutorials/beginner_source/pytorch_with_examples.rst")
 content = rst_path.read_text(encoding="utf-8")
-content = clean_documentation(content)
-headings = extract_headings(content)
-passages = [extract_passage(content, headings, i) for i in range(len(headings))]
+cleaned_content = clean_documentation(content)
+headings = extract_headings(cleaned_content)
+passages = [extract_passage(cleaned_content, headings, i) for i in range(len(headings))]
 
 example_records = extract_all_code_records(content, rst_path)
-print(example_records[0]["docstring"])
-print("--- CLEANED ---")
-print(example_records[0]["cleaned_docstring"])
-# for passage in passages:
-#     print(f"Title: {passage['title']}")
-#     print(f"Level: {passage['level']}")
-#     print(f"Parent Section: {passage['parent_section']}")
-#     print(f"Line Number: {passage['line_number']}")
-#     print("Content:")
-#     print(passage["content"])
-#     print("-" * 40)
+
+for passage in passages:
+    print(f"Title: {passage['title']}")
+    print(f"Level: {passage['level']}")
+    print(f"Parent Section: {passage['parent_section']}")
+    print(f"Line Number: {passage['line_number']}")
+    print("Content:")
+    print(passage["content"])
+    print("-" * 40)
+
+for record in example_records:
+    print(f"Source URL: {record['source_url']}")
+    print(f"Document ID: {record['document_id']}")
+    print(f"Example ID: {record['example_id']}")
+    print(f"Title: {record['title']}")
+    print(f"Section: {record['section']}")
+    print(f"Parent Section: {record['parent_section']}")
+    print(f"Source Path: {record['source_path']}")
+    print(f"Source Type: {record['source_type']}")
+    print("-" * 40)
