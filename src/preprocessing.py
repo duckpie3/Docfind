@@ -56,3 +56,20 @@ def clean_documentation(content: str) -> str:
     content = remove_hyperlink_definitions(content)
     content = clean_inline_rst(content)
     return content
+
+
+def preprocess_passage(passage: dict) -> dict:
+    processed_passage = passage.copy()
+    content = passage["content"]
+
+    content = remove_directive_blocks(content, {"includenodoc"})
+    processed_passage["cleaned_content"] = clean_documentation(content).rstrip()
+
+    return processed_passage
+
+def preprocess_code_record(record: dict) -> dict:
+    processed_record = record.copy()
+    processed_record["cleaned_docstring"] = clean_documentation(
+        record["docstring"]
+    )
+    return processed_record

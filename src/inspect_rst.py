@@ -4,14 +4,15 @@ import re
 import warnings
 from pathlib import Path
 
-from clean_documentation import clean_documentation, remove_directive_blocks
+from preprocessing import preprocess_code_record, preprocess_passage
+
 from document import Document
 
 TUTORIALS_ROOT = Path(os.environ.get("DOCUMENTATION_DOWNLOAD_DIR", "/tmp/tutorials"))
 
 
 def extract_passage(document: Document, heading_index: int) -> dict:
-    content = document.cleaned_content
+    content = document.content
 
     def find_passage_end() -> int:
         next_index = heading_index + 1
@@ -39,13 +40,15 @@ def extract_passage(document: Document, heading_index: int) -> dict:
         "content": passage,
     }
 
+
 def extract_all_passages(document: Document) -> list[dict]:
     passages = []
+
     for heading_index in range(len(document.headings)):
-        passage = extract_passage(document, heading_index)
-        if passage["content"].strip():  # Only include passages with non-empty content
-            passages.append(passage)
+        passages.append(extract_passage(document, heading_index))
+
     return passages
+
 
 def extract_python_docstring(source: str) -> str:
     try:
@@ -150,9 +153,7 @@ def extract_code_record_from_reference(
         record["title"] = code_example["docstring"].splitlines()[0].strip()
     record["source_path"] = str(source_path)
     record["docstring"] = code_example["docstring"]
-    record["cleaned_docstring"] = clean_documentation(code_example["docstring"])
     record["code"] = code_example["code"]
-    record["cleaned_code"] = code_example["code"]
 
     return record
 
@@ -180,23 +181,16 @@ def extract_code_records_from_passage(passage: dict) -> list[dict]:
     return records
 
 
-
 def extract_all_code_records(passages: list[dict]) -> list[dict]:
     records = []
 
     for passage in passages:
-
         if not passage["content"].strip():
             continue
 
         passage_records = extract_code_records_from_passage(passage)
         if not passage_records:
             continue
-        passage["content"] = remove_directive_blocks(
-            passage["content"], {"includenodoc"}
-        )
-        # Remove trailing whitespace from the passage content
-        passage["content"] = passage["content"].rstrip()
         records.extend(passage_records)
 
     return records
@@ -207,28 +201,49 @@ document = Document(str(rst_path))
 passages = extract_all_passages(document)
 example_records = extract_all_code_records(passages)
 
-print("Total passages extracted:", len(passages))
-print("Total example records extracted:", len(example_records))
-print("=" * 40)
-for passage in passages:
-    print("Document ID:", passage["document_id"])
-    print("Source Path:", passage["source_path"])
-    print("Source URL:", passage["source_url"])
-    print(f"Title: {passage['title']}")
-    print(f"Level: {passage['level']}")
-    print(f"Parent Section: {passage['parent_section']}")
-    print(f"Line Number: {passage['line_number']}")
-    print("Content:")
-    print(passage["content"])
-    print("-" * 40)
+processed_passages = [
+    processed
+    for passage in passages
+    if (processed := preprocess_passage(passage))["cleaned_content"].strip()
+]
 
-for record in example_records:
-    print(f"Source URL: {record['source_url']}")
-    print(f"Document ID: {record['document_id']}")
-    print(f"Example ID: {record['example_id']}")
-    print(f"Title: {record['title']}")
-    print(f"Section: {record['section']}")
-    print(f"Parent Section: {record['parent_section']}")
-    print(f"Source Path: {record['source_path']}")
-    print(f"Source Type: {record['source_type']}")
-    print("-" * 40)
+processed_example_records = [
+    preprocess_code_record(record) for record in example_records
+]
+
+print("Headings:", len(document.headings))
+print("Extracted passages:", len(passages))
+print("Processed passages:", len(processed_passages))
+
+for passage in passages:
+    processed = preprocess_passage(passage)
+
+    if not processed["cleaned_content"].strip():
+        print(f"\nDISCARDED: {passage['title']}")
+        print("RAW CONTENT:")
+        print(passage["content"])
+
+# print("Total example records extracted:", len(example_records))
+# print("=" * 40)
+# for passage in processed_passages:
+#     print("Document ID:", passage["document_id"])
+#     print("Source Path:", passage["source_path"])
+#     print("Source URL:", passage["source_url"])
+#     print(f"Title: {passage['title']}")
+#     print(f"Level: {passage['level']}")
+#     print(f"Parent Section: {passage['parent_section']}")
+#     print(f"Line Number: {passage['line_number']}")
+#     print("Content:")
+#     print(passage["cleaned_content"])
+#     print("-" * 40)
+
+# for record in processed_example_records:
+#     print(f"Source URL: {record['source_url']}")
+#     print(f"Document ID: {record['document_id']}")
+#     print(f"Example ID: {record['example_id']}")
+#     print(f"Title: {record['title']}")
+#     print(f"Section: {record['section']}")
+#     print(f"Parent Section: {record['parent_section']}")
+#     print(f"Source Path: {record['source_path']}")
+#     print(f"Source Type: {record['source_type']}")
+#     print("-" * 40)

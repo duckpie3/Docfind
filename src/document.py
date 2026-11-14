@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 
-from clean_documentation import clean_documentation
-
 
 class Document:
     def __init__(self, path: str):
@@ -14,7 +12,6 @@ class Document:
         self.document_id = str(self.source_path.with_suffix("")).replace("/", "_")
         self.source_url = self._generate_document_url()
         self.content = self.path.read_text(encoding="utf-8")
-        self.cleaned_content = clean_documentation(self.content)
         self.headings = self._extract_headings()
 
     def _generate_document_url(self) -> str:
@@ -57,7 +54,7 @@ class Document:
         return None
 
     def _extract_headings(self) -> list[dict]:
-        lines = self.cleaned_content.splitlines()
+        lines = self.content.splitlines()
         headings = []
         current_section = None
 
